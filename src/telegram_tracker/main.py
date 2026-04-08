@@ -1,5 +1,9 @@
+import asyncio
+from telegram_tracker.client import connect_telegram
+
+
 def main():
-    print("Telegram Tracker started")
+    asyncio.run(connect_telegram())
 
 
 if __name__ == "__main__":

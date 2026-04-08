@@ -4,3 +4,5 @@ __pycache__/
 .idea/
 etransmit.py
 project_for_chatgpt.txt
+config.py
+*.session
