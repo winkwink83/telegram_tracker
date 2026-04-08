@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 .idea/
+etransmit.py
+project_for_chatgpt.txt
