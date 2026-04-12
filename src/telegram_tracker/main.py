@@ -1,9 +1,10 @@
 import asyncio
-from telegram_tracker.client import download_saved_voices
+
+from telegram_tracker.client import download_and_transcribe_saved_voices
 
 
 def main():
-    asyncio.run(download_saved_voices())
+    asyncio.run(download_and_transcribe_saved_voices())
 
 
 if __name__ == "__main__":
