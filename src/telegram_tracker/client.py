@@ -1,12 +1,13 @@
-import asyncio
 import json
+import time
 from pathlib import Path
-from typing import Set
+from typing import Any
 
-from telethon import TelegramClient, events
+import requests
 from faster_whisper import WhisperModel
 
-from telegram_tracker.config import API_ID, API_HASH
+from telegram_tracker.bot_sender import send_message, telegram_api
+from telegram_tracker.config import BOT_TOKEN
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -22,115 +23,152 @@ def ensure_directories() -> None:
     TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def load_processed_ids() -> Set[int]:
+def load_last_update_id() -> int:
     if not STATE_FILE.exists():
-        return set()
+        return 0
 
     try:
         data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-        return {int(x) for x in data.get("processed_message_ids", [])}
+        return int(data.get("last_update_id", 0))
     except Exception:
-        print("⚠️ Nie udało się wczytać state.json, startuję z pustym stanem.")
-        return set()
+        print("⚠️ Nie udało się wczytać state.json, startuję od zera.")
+        return 0
 
 
-def save_processed_ids(processed_ids: Set[int]) -> None:
-    payload = {
-        "processed_message_ids": sorted(processed_ids)
-    }
+def save_last_update_id(update_id: int) -> None:
+    payload = {"last_update_id": update_id}
+
     STATE_FILE.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
 
-async def process_voice_message(message, model: WhisperModel, processed_ids: Set[int]) -> None:
-    if message.id in processed_ids:
-        print(f"⏭️ Wiadomość ID={message.id} już była przetworzona")
-        return
+def download_file(file_id: str, target_path: Path) -> None:
+    file_info = telegram_api("getFile", {"file_id": file_id})
+    file_path = file_info["result"]["file_path"]
 
-    if not message.voice:
-        return
+    url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
 
-    timestamp = message.date.astimezone().strftime("%Y-%m-%d_%H-%M-%S")
-    audio_file_path = DOWNLOAD_DIR / f"{timestamp}_{message.id}.oga"
-    transcript_file_path = TRANSCRIPTS_DIR / f"{timestamp}_{message.id}.txt"
+    response = requests.get(url, timeout=60)
+    response.raise_for_status()
 
-    print(f"\n🎤 Głosówka ID={message.id}")
+    target_path.write_bytes(response.content)
 
-    if not audio_file_path.exists():
-        downloaded_path = await message.download_media(file=str(audio_file_path))
-        print(f"📥 Pobrano: {downloaded_path}")
-    else:
-        print(f"⏭️ Audio już istnieje: {audio_file_path.name}")
 
-    if transcript_file_path.exists():
-        print(f"⏭️ Transkrypcja już istnieje: {transcript_file_path.name}")
-        processed_ids.add(message.id)
-        save_processed_ids(processed_ids)
-        return
-
-    print("🧠 Transkrypcja w toku...")
-    segments, _info = model.transcribe(str(audio_file_path), language="pl")
+def transcribe_voice(audio_path: Path, model: WhisperModel) -> str:
+    segments, _info = model.transcribe(str(audio_path), language="pl")
     text = " ".join(segment.text.strip() for segment in segments).strip()
 
     if not text:
-        text = "[Brak rozpoznanego tekstu]"
+        return "[Brak rozpoznanego tekstu]"
+
+    return text
+
+
+def process_voice_message(message: dict[str, Any], model: WhisperModel) -> None:
+    chat_id = message["chat"]["id"]
+    message_id = message["message_id"]
+    voice = message["voice"]
+
+    file_id = voice["file_id"]
+    timestamp = message.get("date", int(time.time()))
+
+    audio_file_path = DOWNLOAD_DIR / f"{timestamp}_{message_id}.oga"
+    transcript_file_path = TRANSCRIPTS_DIR / f"{timestamp}_{message_id}.txt"
+
+    print(f"\n🎤 Głosówka chat_id={chat_id}, message_id={message_id}")
+
+    if not audio_file_path.exists():
+        print("📥 Pobieram audio...")
+        download_file(file_id, audio_file_path)
+        print(f"✅ Pobrano: {audio_file_path.name}")
+
+    print("🧠 Transkrypcja w toku...")
+    text = transcribe_voice(audio_file_path, model)
 
     transcript_file_path.write_text(text, encoding="utf-8")
 
-    processed_ids.add(message.id)
-    save_processed_ids(processed_ids)
-
     print(f"📝 Tekst: {text}")
-    print(f"💾 Zapisano transkrypcję: {transcript_file_path}")
+    print(f"💾 Zapisano: {transcript_file_path.name}")
+
+    send_message(chat_id, f"Transkrypcja:\n\n{text}")
 
 
-async def catch_up_existing_voices(client: TelegramClient, model: WhisperModel, processed_ids: Set[int], limit: int = 50) -> None:
-    to_process = []
+def process_text_message(message: dict[str, Any]) -> None:
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "").strip()
 
-    async for message in client.iter_messages("me", limit=limit):
-        if message.voice and message.id not in processed_ids:
-            to_process.append(message)
+    if not text:
+        return
 
-    to_process.reverse()
+    if text == "/start":
+        send_message(
+            chat_id,
+            "Bot działa. Wyślij głosówkę, a zrobię transkrypcję."
+        )
+        return
 
-    for message in to_process:
-        try:
-            await process_voice_message(message, model, processed_ids)
-        except Exception as exc:
-            print(f"❌ Błąd przy backlogu ID={message.id}: {exc}")
+    send_message(
+        chat_id,
+        f"Odebrałem tekst:\n\n{text}"
+    )
 
 
-async def watch_saved_voices_forever() -> None:
+def handle_update(update: dict[str, Any], model: WhisperModel) -> None:
+    message = update.get("message")
+
+    if not message:
+        return
+
+    if "voice" in message:
+        process_voice_message(message, model)
+        return
+
+    if "text" in message:
+        process_text_message(message)
+        return
+
+
+def watch_bot_forever() -> None:
     ensure_directories()
-    processed_ids = load_processed_ids()
+
+    last_update_id = load_last_update_id()
 
     print("⏳ Ładowanie modelu Whisper...")
     model = WhisperModel("base", device="cpu", compute_type="int8")
     print("✅ Model gotowy")
 
-    client = TelegramClient("session", API_ID, API_HASH)
+    print("🤖 Bot nasłuchuje. Wyślij głosówkę do bota.")
 
-    @client.on(events.NewMessage(chats="me"))
-    async def handler(event):
-        message = event.message
-
-        if not message.voice:
-            return
-
+    while True:
         try:
-            await process_voice_message(message, model, processed_ids)
+            data = telegram_api(
+                "getUpdates",
+                {
+                    "offset": last_update_id + 1,
+                    "timeout": 5,
+                    "allowed_updates": ["message"],
+                },
+            )
+
+            updates = data.get("result", [])
+
+            for update in updates:
+                update_id = update["update_id"]
+
+                try:
+                    handle_update(update, model)
+                except Exception as exc:
+                    print(f"❌ Błąd przy update_id={update_id}: {exc}")
+
+                last_update_id = update_id
+                save_last_update_id(last_update_id)
+
+        except KeyboardInterrupt:
+            print("\n👋 Zatrzymano bota.")
+            break
+
         except Exception as exc:
-            print(f"❌ Błąd przy nowej głosówce ID={message.id}: {exc}")
-
-    print("🔌 Łączenie z Telegramem...")
-    await client.start()
-    print("✅ Połączono z Telegramem")
-
-    print("🔎 Obrabiam zaległe głosówki...")
-    await catch_up_existing_voices(client, model, processed_ids, limit=50)
-
-    print("👂 Nasłuch aktywny. Czekam na nowe głosówki w Saved Messages...")
-
-    await client.run_until_disconnected()
+            print(f"❌ Błąd pętli bota: {exc}")
+            time.sleep(5)

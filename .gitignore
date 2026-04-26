@@ -1,9 +1,13 @@
 .venv/
+venv/
 __pycache__/
 *.pyc
 .idea/
-etransmit.py
-project_for_chatgpt.txt
-config.py
+
+.env
 *.session
 downloads/
+*.egg-info/
+
+project_for_chatgpt.txt
+etransmit.py
