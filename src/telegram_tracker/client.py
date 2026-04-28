@@ -2,16 +2,14 @@ import json
 import time
 from pathlib import Path
 from typing import Any
-import threading
-from datetime import datetime
 
 import requests
 from faster_whisper import WhisperModel
 
 from telegram_tracker.bot_sender import send_message, telegram_api
 from telegram_tracker.config import BOT_TOKEN
-from telegram_tracker.reminder_parser import parse_reminder
-from telegram_tracker.reminders import save_reminder
+from telegram_tracker.services import handle_voice
+from telegram_tracker.scheduler import schedule_reminder
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -20,17 +18,6 @@ DOWNLOAD_DIR = BASE_DIR / "voice"
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
 STATE_FILE = BASE_DIR / "state.json"
 
-
-def schedule_reminder(chat_id, remind_at, message):
-    delay = (remind_at - datetime.now()).total_seconds()
-
-    if delay < 0:
-        delay = 0
-
-    def job():
-        send_message(chat_id, f"⏰ Przypomnienie:\n\n{message}")
-
-    threading.Timer(delay, job).start()
 
 def ensure_directories() -> None:
     BASE_DIR.mkdir(parents=True, exist_ok=True)
@@ -71,16 +58,6 @@ def download_file(file_id: str, target_path: Path) -> None:
     target_path.write_bytes(response.content)
 
 
-def transcribe_voice(audio_path: Path, model: WhisperModel) -> str:
-    segments, _info = model.transcribe(str(audio_path), language="pl")
-    text = " ".join(segment.text.strip() for segment in segments).strip()
-
-    if not text:
-        return "[Brak rozpoznanego tekstu]"
-
-    return text
-
-
 def process_voice_message(message: dict[str, Any], model: WhisperModel) -> None:
     chat_id = message["chat"]["id"]
     message_id = message["message_id"]
@@ -99,34 +76,27 @@ def process_voice_message(message: dict[str, Any], model: WhisperModel) -> None:
         download_file(file_id, audio_file_path)
         print(f"✅ Pobrano: {audio_file_path.name}")
 
-    print("🧠 Transkrypcja w toku...")
-    text = transcribe_voice(audio_file_path, model)
+    result = handle_voice(audio_file_path, model)
 
-    transcript_file_path.write_text(text, encoding="utf-8")
+    transcript_file_path.write_text(result["text"], encoding="utf-8")
 
-    print(f"📝 Tekst: {text}")
-    print(f"💾 Zapisano: {transcript_file_path.name}")
-
-    reminder = parse_reminder(text)
-
-    if reminder:
+    if result["type"] == "reminder":
         schedule_reminder(
             chat_id,
-            reminder["remind_at"],
-            reminder["message"],
+            result["remind_at"],
+            result["message"],
         )
-
 
         send_message(
             chat_id,
             (
                 "⏰ Ustawiłem przypomnienie\n\n"
-                f"Kiedy: {reminder['remind_at'].strftime('%d-%m-%Y %H:%M:%S')}\n"
-                f"Treść: {reminder['message']}"
+                f"Kiedy: {result['remind_at'].strftime('%d-%m-%Y %H:%M:%S')}\n"
+                f"Treść: {result['message']}"
             ),
         )
     else:
-        send_message(chat_id, f"Transkrypcja:\n\n{text}")
+        send_message(chat_id, f"Transkrypcja:\n\n{result['text']}")
 
 
 def process_text_message(message: dict[str, Any]) -> None:
