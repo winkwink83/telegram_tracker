@@ -10,6 +10,7 @@ from telegram_tracker.bot_sender import send_message, telegram_api
 from telegram_tracker.config import BOT_TOKEN
 from telegram_tracker.services import handle_voice
 from telegram_tracker.scheduler import schedule_reminder
+from telegram_tracker.rag_engine import ask_rag
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -109,14 +110,15 @@ def process_text_message(message: dict[str, Any]) -> None:
     if text == "/start":
         send_message(
             chat_id,
-            "Bot działa. Wyślij głosówkę, a zrobię transkrypcję."
+            "Bot działa. Wyślij głosówkę albo zadaj pytanie o notatki."
         )
         return
 
-    send_message(
-        chat_id,
-        f"Odebrałem tekst:\n\n{text}"
-    )
+    try:
+        answer = ask_rag(text)
+        send_message(chat_id, answer)
+    except Exception as exc:
+        send_message(chat_id, f"Nie udało mi się odpowiedzieć: {exc}")
 
 
 def handle_update(update: dict[str, Any], model: WhisperModel) -> None:
