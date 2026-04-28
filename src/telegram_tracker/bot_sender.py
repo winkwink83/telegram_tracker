@@ -3,7 +3,7 @@ from typing import Any
 
 import requests
 
-from telegram_tracker.config import ASSISTANT_PREFIX, BOT_TOKEN
+from telegram_tracker.config import ASSISTANT_PREFIX, BOT_TOKEN, DEFAULT_CHAT_ID
 
 
 def format_assistant_message(text: str) -> str:
@@ -45,13 +45,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Wyślij wiadomość przez Telegram bota."
     )
-    parser.add_argument("chat_id", help="ID czatu, do którego wysłać wiadomość")
     parser.add_argument("message", nargs="+", help="Treść wiadomości")
+    parser.add_argument(
+        "--chat-id",
+        help="ID czatu (opcjonalne, fallback na DEFAULT_CHAT_ID z .env)",
+    )
 
     args = parser.parse_args()
 
+    chat_id = args.chat_id or DEFAULT_CHAT_ID
+
+    if not chat_id:
+        raise RuntimeError("Brak chat_id. Podaj --chat-id albo ustaw DEFAULT_CHAT_ID w .env")
+
     text = " ".join(args.message)
-    send_message(args.chat_id, text)
+    send_message(chat_id, text)
 
     print("✅ Wysłano")
 

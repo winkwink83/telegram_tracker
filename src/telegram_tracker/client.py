@@ -2,12 +2,16 @@ import json
 import time
 from pathlib import Path
 from typing import Any
+import threading
+from datetime import datetime
 
 import requests
 from faster_whisper import WhisperModel
 
 from telegram_tracker.bot_sender import send_message, telegram_api
 from telegram_tracker.config import BOT_TOKEN
+from telegram_tracker.reminder_parser import parse_reminder
+from telegram_tracker.reminders import save_reminder
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -16,6 +20,17 @@ DOWNLOAD_DIR = BASE_DIR / "voice"
 TRANSCRIPTS_DIR = BASE_DIR / "transcripts"
 STATE_FILE = BASE_DIR / "state.json"
 
+
+def schedule_reminder(chat_id, remind_at, message):
+    delay = (remind_at - datetime.now()).total_seconds()
+
+    if delay < 0:
+        delay = 0
+
+    def job():
+        send_message(chat_id, f"⏰ Przypomnienie:\n\n{message}")
+
+    threading.Timer(delay, job).start()
 
 def ensure_directories() -> None:
     BASE_DIR.mkdir(parents=True, exist_ok=True)
@@ -92,7 +107,26 @@ def process_voice_message(message: dict[str, Any], model: WhisperModel) -> None:
     print(f"📝 Tekst: {text}")
     print(f"💾 Zapisano: {transcript_file_path.name}")
 
-    send_message(chat_id, f"Transkrypcja:\n\n{text}")
+    reminder = parse_reminder(text)
+
+    if reminder:
+        schedule_reminder(
+            chat_id,
+            reminder["remind_at"],
+            reminder["message"],
+        )
+
+
+        send_message(
+            chat_id,
+            (
+                "⏰ Ustawiłem przypomnienie\n\n"
+                f"Kiedy: {reminder['remind_at'].strftime('%d-%m-%Y %H:%M:%S')}\n"
+                f"Treść: {reminder['message']}"
+            ),
+        )
+    else:
+        send_message(chat_id, f"Transkrypcja:\n\n{text}")
 
 
 def process_text_message(message: dict[str, Any]) -> None:
