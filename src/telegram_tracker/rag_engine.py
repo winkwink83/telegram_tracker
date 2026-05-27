@@ -61,5 +61,10 @@ PYTANIE UŻYTKOWNIKA:
 ODPOWIEDŹ:
 """
 
+    print("\n" + "=" * 80)
+    print("PROMPT WYSYŁANY DO MODELU:\n")
+    print(prompt)
+    print("=" * 80 + "\n")
+
     response = model.generate_content(prompt)
     return response.text.strip()

@@ -11,3 +11,9 @@ downloads/
 
 project_for_chatgpt.txt
 etransmit.py
+
+*.log
+.idea/
+dataset/
+downloads/
+*.ps1
