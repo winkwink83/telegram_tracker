@@ -1,4 +1,3 @@
-import json
 import time
 from pathlib import Path
 from typing import Any
@@ -9,8 +8,9 @@ from faster_whisper import WhisperModel
 from telegram_tracker.bot_sender import send_message, telegram_api
 from telegram_tracker.config import BOT_TOKEN
 from telegram_tracker.services import handle_voice
-from telegram_tracker.scheduler import schedule_reminder
 from telegram_tracker.rag_engine import ask_rag
+
+from telegram_tracker.state import load_last_update_id, save_last_update_id
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -24,28 +24,6 @@ def ensure_directories() -> None:
     BASE_DIR.mkdir(parents=True, exist_ok=True)
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
     TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def load_last_update_id() -> int:
-    if not STATE_FILE.exists():
-        return 0
-
-    try:
-        data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-        return int(data.get("last_update_id", 0))
-    except Exception:
-        print("⚠️ Nie udało się wczytać state.json, startuję od zera.")
-        return 0
-
-
-def save_last_update_id(update_id: int) -> None:
-    payload = {"last_update_id": update_id}
-
-    STATE_FILE.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
 
 def download_file(file_id: str, target_path: Path) -> None:
     file_info = telegram_api("getFile", {"file_id": file_id})
@@ -81,23 +59,7 @@ def process_voice_message(message: dict[str, Any], model: WhisperModel) -> None:
 
     transcript_file_path.write_text(result["text"], encoding="utf-8")
 
-    if result["type"] == "reminder":
-        schedule_reminder(
-            chat_id,
-            result["remind_at"],
-            result["message"],
-        )
-
-        send_message(
-            chat_id,
-            (
-                "⏰ Ustawiłem przypomnienie\n\n"
-                f"Kiedy: {result['remind_at'].strftime('%d-%m-%Y %H:%M:%S')}\n"
-                f"Treść: {result['message']}"
-            ),
-        )
-    else:
-        send_message(chat_id, f"Transkrypcja:\n\n{result['text']}")
+    send_message(chat_id, f"Transkrypcja:\n\n{result['text']}")
 
 
 def process_text_message(message: dict[str, Any]) -> None:
@@ -115,6 +77,7 @@ def process_text_message(message: dict[str, Any]) -> None:
         return
 
     try:
+        send_message(chat_id, "🔎 Przetwarzam notatki...")
         answer = ask_rag(text)
         send_message(chat_id, answer)
     except Exception as exc:
@@ -139,10 +102,10 @@ def handle_update(update: dict[str, Any], model: WhisperModel) -> None:
 def watch_bot_forever() -> None:
     ensure_directories()
 
-    last_update_id = load_last_update_id()
+    last_update_id = load_last_update_id(STATE_FILE)
 
     print("⏳ Ładowanie modelu Whisper...")
-    model = WhisperModel("medium", device="cpu", compute_type="int8")
+    model = WhisperModel("small", device="cpu", compute_type="int8")
     print("✅ Model gotowy")
 
     print("🤖 Bot nasłuchuje. Wyślij głosówkę do bota.")
@@ -169,7 +132,7 @@ def watch_bot_forever() -> None:
                     print(f"❌ Błąd przy update_id={update_id}: {exc}")
 
                 last_update_id = update_id
-                save_last_update_id(last_update_id)
+                save_last_update_id(STATE_FILE, last_update_id)
 
         except KeyboardInterrupt:
             print("\n👋 Zatrzymano bota.")
