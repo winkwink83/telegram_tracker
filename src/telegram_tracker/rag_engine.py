@@ -25,14 +25,15 @@ Jeśli odpowiedzi nie ma w notatkach, powiedz:
 "Nie widzę tego w notatkach."
 """
 
-
+RECENT_NOTES_LIMIT = 10
 def load_notes() -> str:
     if not TRANSCRIPTS_DIR.exists():
         return ""
 
     notes = []
+    files = sorted(TRANSCRIPTS_DIR.glob("*.txt"))[-RECENT_NOTES_LIMIT:]
 
-    for file_path in sorted(TRANSCRIPTS_DIR.glob("*.txt")):
+    for file_path in files:
         text = file_path.read_text(encoding="utf-8").strip()
 
         if text:
