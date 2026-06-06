@@ -1,12 +1,10 @@
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 import google.generativeai as genai
 
+from telegram_tracker.retriever import search
 
-PROJECT_DIR = Path(__file__).resolve().parent
-TRANSCRIPTS_DIR = PROJECT_DIR / "downloads" / "transcripts"
 
 load_dotenv()
 
@@ -19,53 +17,44 @@ SYSTEM_PROMPT = """
 Jesteś osobistym asystentem użytkownika.
 
 Odpowiadasz po polsku, krótko i konkretnie.
-Masz odpowiadać głównie na podstawie NOTATEK użytkownika.
+Masz odpowiadać wyłącznie na podstawie KONTEKSTU z notatek użytkownika.
 
-Jeśli odpowiedzi nie ma w notatkach, powiedz:
+Jeśli odpowiedzi nie ma w kontekście, powiedz:
 "Nie widzę tego w notatkach."
 """
 
-RECENT_NOTES_LIMIT = 10
-def load_notes() -> str:
-    if not TRANSCRIPTS_DIR.exists():
-        return ""
 
-    notes = []
-    files = sorted(TRANSCRIPTS_DIR.glob("*.txt"))[-RECENT_NOTES_LIMIT:]
+def build_context(results: list[dict]) -> str:
+    context_parts = []
 
-    for file_path in files:
-        text = file_path.read_text(encoding="utf-8").strip()
+    for i, result in enumerate(results, start=1):
+        context_parts.append(
+            f"--- FRAGMENT {i} ({result['source_file']}) ---\n"
+            f"{result['text']}"
+        )
 
-        if text:
-            notes.append(
-                f"--- NOTATKA: {file_path.name} ---\n{text}"
-            )
-
-    return "\n\n".join(notes)
+    return "\n\n".join(context_parts)
 
 
 def ask_rag(question: str) -> str:
-    notes = load_notes()
+    results = search(question, k=3)
 
-    if not notes:
-        return "Nie mam jeszcze żadnych notatek."
+    if not results:
+        return "Nie mam jeszcze żadnych zaindeksowanych notatek."
+
+    context = build_context(results)
 
     prompt = f"""
 {SYSTEM_PROMPT}
 
-NOTATKI:
-{notes}
+KONTEKST Z NOTATEK:
+{context}
 
 PYTANIE UŻYTKOWNIKA:
 {question}
 
 ODPOWIEDŹ:
 """
-
-    # print("\n" + "=" * 80)
-    # print("PROMPT WYSYŁANY DO MODELU:\n")
-    # print(prompt)
-    # print("=" * 80 + "\n")
 
     response = model.generate_content(prompt)
     return response.text.strip()
