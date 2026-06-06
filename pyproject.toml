@@ -2,12 +2,17 @@
 name = "telegram-tracker"
 version = "0.1.0"
 requires-python = ">=3.10"
+
 dependencies = [
     "faster-whisper",
     "requests",
     "python-dotenv",
     "google-generativeai>=0.8.6",
     "numpy>=2.2.6",
+
+    # RAG
+    "sentence-transformers>=5.1.0",
+    "faiss-cpu>=1.12.0",
 ]
 
 [tool.setuptools.packages.find]
