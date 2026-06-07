@@ -20,8 +20,6 @@ def load_all_chunks() -> list[dict]:
         text = file_path.read_text(encoding="utf-8")
         file_chunks = chunk_text(text)
 
-        print(f"{file_path.name}: {len(file_chunks)} chunków")
-
         for chunk in file_chunks:
             records.append({
                 "text": chunk,
@@ -31,7 +29,7 @@ def load_all_chunks() -> list[dict]:
     return records
 
 
-if __name__ == "__main__":
+def rebuild_index() -> None:
     records = load_all_chunks()
 
     embeddings = [embed_text(record["text"]) for record in records]
@@ -47,7 +45,8 @@ if __name__ == "__main__":
     with open(INDEX_DIR / "metadata.json", "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
 
-    print(f"Liczba chunków: {len(records)}")
-    print(f"Liczba wektorów w FAISS: {index.ntotal}")
-    print("Zapisano index.faiss")
-    print("Zapisano metadata.json")
+    print(f"✅ Przebudowano indeks RAG: {len(records)} chunków")
+
+
+if __name__ == "__main__":
+    rebuild_index()

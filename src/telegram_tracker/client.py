@@ -11,6 +11,7 @@ from telegram_tracker.services import handle_voice
 from telegram_tracker.rag_engine import ask_rag
 
 from telegram_tracker.state import load_last_update_id, save_last_update_id
+from telegram_tracker.index_builder import rebuild_index
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
