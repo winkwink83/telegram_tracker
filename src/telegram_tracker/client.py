@@ -11,7 +11,7 @@ from telegram_tracker.services import handle_voice
 from telegram_tracker.rag_engine import ask_rag
 
 from telegram_tracker.state import load_last_update_id, save_last_update_id
-from telegram_tracker.index_builder import rebuild_index
+from telegram_tracker.index_builder import append_file_to_index
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -59,6 +59,8 @@ def process_voice_message(message: dict[str, Any], model: WhisperModel) -> None:
     result = handle_voice(audio_file_path, model)
 
     transcript_file_path.write_text(result["text"], encoding="utf-8")
+
+    append_file_to_index(transcript_file_path)
 
     send_message(chat_id, f"Transkrypcja:\n\n{result['text']}")
 
