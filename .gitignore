@@ -18,3 +18,7 @@ etransmit.py
 dataset/
 downloads/
 *.ps1
+
+experiments/
+notes/
+
