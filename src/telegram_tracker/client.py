@@ -108,7 +108,7 @@ def watch_bot_forever() -> None:
     last_update_id = load_last_update_id(STATE_FILE)
 
     print("⏳ Ładowanie modelu Whisper...")
-    model = WhisperModel("small", device="cpu", compute_type="int8")
+    model = WhisperModel("base", device="cpu", compute_type="int8")
     print("✅ Model gotowy")
 
     print("🤖 Bot nasłuchuje. Wyślij głosówkę do bota.")
