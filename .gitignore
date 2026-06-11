@@ -12,6 +12,7 @@ rag_index/
 
 project_for_chatgpt.txt
 etransmit.py
+READ_ME.txt
 
 *.log
 .idea/
