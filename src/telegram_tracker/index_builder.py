@@ -80,11 +80,7 @@ def append_file_to_index(file_path: Path) -> None:
         index = faiss.IndexFlatIP(384)
         metadata = []
 
-    print(f"Przed add: {index.ntotal}")
-
     index.add(vectors)
-
-    print(f"Po add: {index.ntotal}")
 
     metadata.extend(new_records)
 
@@ -92,9 +88,6 @@ def append_file_to_index(file_path: Path) -> None:
 
     with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
-
-    print(f"✅ Dopisano do indeksu: {len(new_records)} chunków z {file_path.name}")
-
 
 if __name__ == "__main__":
     rebuild_index()
