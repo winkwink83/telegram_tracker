@@ -28,8 +28,6 @@ def ensure_directories() -> None:
 
 def download_file(file_id: str, target_path: Path) -> None:
     file_info = telegram_api("getFile", {"file_id": file_id})
-    print("TUTAJ: ")
-    print(file_info)
     file_path = file_info["result"]["file_path"]
 
     url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
