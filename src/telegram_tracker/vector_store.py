@@ -11,7 +11,7 @@ def create_index() -> faiss.Index:
 if __name__ == "__main__":
     index = create_index()
 
-    document_embedding = embed_text("Muszę kupić mleko")
+    document_embedding = embed_text("Mleko jest ważne")
     document_vector = np.array([document_embedding], dtype="float32")
 
     index.add(document_vector)

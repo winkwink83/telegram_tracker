@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 
 from telegram_tracker.retriever import search
+from pprint import pprint
 
 
 load_dotenv()
@@ -38,6 +39,8 @@ def build_context(results: list[dict]) -> str:
 
 def ask_rag(question: str) -> str:
     results = search(question, k=3)
+    print("Wynik przeszukiwania bazy danych: \n")
+    pprint(results)
 
     if not results:
         return "Nie mam jeszcze żadnych zaindeksowanych notatek."

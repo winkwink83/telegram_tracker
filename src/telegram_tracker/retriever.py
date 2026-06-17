@@ -4,6 +4,7 @@ from pathlib import Path
 import faiss
 import numpy as np
 
+
 from telegram_tracker.embeddings import embed_text
 
 
@@ -23,6 +24,7 @@ def search(query: str, k: int = 3) -> list[dict]:
     )
 
     scores, ids = index.search(query_vector, k)
+    print("tutaj: ",(scores, ids))
 
     results = []
 

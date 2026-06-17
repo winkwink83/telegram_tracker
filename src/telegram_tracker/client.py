@@ -49,20 +49,26 @@ def process_voice_message(message: dict[str, Any], model: WhisperModel) -> None:
     audio_file_path = DOWNLOAD_DIR / f"{timestamp}_{message_id}.oga"
     transcript_file_path = TRANSCRIPTS_DIR / f"{timestamp}_{message_id}.txt"
 
-    print(f"\n🎤 Głosówka chat_id={chat_id}, message_id={message_id}")
+    print(f"🎤 Głosówka chat_id={chat_id}, message_id={message_id}")
 
     if not audio_file_path.exists():
+        start = time.time()
         print("📥 Pobieram audio...")
         download_file(file_id, audio_file_path)
+        print(f"⏱️ Pobieranie zajęło: {time.time() - start:.2f} s")
         print(f"✅ Pobrano: {audio_file_path.name}")
 
     result = handle_voice(audio_file_path, model)
 
     transcript_file_path.write_text(result["text"], encoding="utf-8")
 
+    start = time.time()
     append_file_to_index(transcript_file_path)
+    print(f"⏱️ Dodawanie do indexu zajelo : {time.time() - start:.2f} s")
 
+    start = time.time()
     send_message(chat_id, f"Transkrypcja:\n\n{result['text']}")
+    print(f"⏱️ Wyslanie wiadomosci zajelo: {time.time() - start:.2f} s")
 
 
 def process_text_message(message: dict[str, Any]) -> None:
@@ -89,7 +95,7 @@ def process_text_message(message: dict[str, Any]) -> None:
 
 def handle_update(update: dict[str, Any], model: WhisperModel) -> None:
     message = update.get("message")
-
+    print("Messagie w handle_update", message)
     if not message:
         return
 
@@ -108,7 +114,7 @@ def watch_bot_forever() -> None:
     last_update_id = load_last_update_id(STATE_FILE)
 
     print("⏳ Ładowanie modelu Whisper...")
-    model = WhisperModel("base", device="cpu", compute_type="int8")
+    model = WhisperModel("tiny", device="cpu", compute_type="int8")
     print("✅ Model gotowy")
 
     print("🤖 Bot nasłuchuje. Wyślij głosówkę do bota.")
@@ -130,7 +136,12 @@ def watch_bot_forever() -> None:
                 update_id = update["update_id"]
 
                 try:
+                    print("\nStart przetwarzania wiadomosci")
+                    start = time.time()
                     handle_update(update, model)
+                    print(f"⏱️ Handle update zajął: {time.time() - start:.2f} s")
+                    print(f"⏱️ Koniec przetwarzania wiadomosci")
+
                 except Exception as exc:
                     print(f"❌ Błąd przy update_id={update_id}: {exc}")
 
