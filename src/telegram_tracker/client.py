@@ -96,6 +96,7 @@ def process_text_message(message: dict[str, Any]) -> None:
 def handle_update(update: dict[str, Any], model: WhisperModel) -> None:
     message = update.get("message")
     print("Messagie w handle_update", message)
+
     if not message:
         return
 
@@ -121,6 +122,8 @@ def watch_bot_forever() -> None:
 
     while True:
         try:
+            poll_start = time.time()
+
             data = telegram_api(
                 "getUpdates",
                 {
@@ -129,6 +132,8 @@ def watch_bot_forever() -> None:
                     "allowed_updates": ["message"],
                 },
             )
+
+            print(f"⏱️ getUpdates czekało: {time.time() - poll_start:.2f} s")
 
             updates = data.get("result", [])
 
